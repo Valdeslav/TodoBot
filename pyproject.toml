@@ -6,6 +6,10 @@ authors = ["Vladislav Tsarenko <vadiktsarenko@mail.ru>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
+firebase_admin = "^4.3.0"
+telegram = "^0.0.1"
+python-telegram-bot = "^12.8"
+python-dateutil = "^2.8.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
