@@ -1,0 +1,8 @@
+README.rst
+setup.py
+todobot/__init__.py
+todobot.egg-info/PKG-INFO
+todobot.egg-info/SOURCES.txt
+todobot.egg-info/dependency_links.txt
+todobot.egg-info/requires.txt
+todobot.egg-info/top_level.txt

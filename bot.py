@@ -1,25 +1,32 @@
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler
 import logging
-from telegram import ReplyKeyboardMarkup
-from task import Task
-from db import *
 from datetime import datetime, timezone
+
 from dateutil.tz import tzutc, tzlocal
 
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler
+from telegram import ReplyKeyboardMarkup
+
+from task import Task
+from db import *
+
+
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger=logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-db=init_firebase('todobotfirebase-firebase-adminsdk-npghl-cdadbeff71.json')
-task=Task()
+db = init_firebase('todobotfirebase-firebase-adminsdk-npghl-cdadbeff71.json')
+task = Task()
 
-NAME, DESCRIPTION, DATE, TIME=map(chr, range(4))
-UPDATE_GET, UPDATE_DESCRIPTION, UPDATE_DATE, UPDATE_TIME=map(chr, range(4, 8))
-DELETE_GET=map(chr, range(8, 9))
-DONE_GET=map(chr, range(9, 10))
+NAME, DESCRIPTION, DATE, TIME = map(chr, range(4))
+UPDATE_GET, UPDATE_DESCRIPTION, UPDATE_DATE, UPDATE_TIME = map(chr, range(4, 8))
+DELETE_GET = map(chr, range(8, 9))
+DONE_GET = map(chr, range(9, 10))
+
 
 def start(update, context):
+	add_user(update.message.from_user.id, db)
 	update.message.reply_text("Бот запущен!\nДобавте ему свои задачи, и он напомнит вам, если вы не сделали их вовремя \
 								\nиспользуйте /help для просмотра доступных команд")
+
 	
 def help(update, context):
 	update.message.reply_text("Список команд бота:\n/addTask - добавить новую задачу \
@@ -28,31 +35,35 @@ def help(update, context):
 								\n/doneTask - пометить задачу как выполненную \
 								\n/getAll - получить список всех задач")
 
+
 def unknown(update, context):
 	update.message.reply_text('Неизвестная команда\nИспользуйте /help для просмотра доступных команд')
 
+
 def addTask(update, context):
-	add_user(update.message.from_user.id, db)
 	update.message.reply_text("Введите название задачи\nДля отмены добавления используйте команду /cancel")
 	return NAME
 
+
 def name(update, context):
-	task.user=update.message.from_user.id
-	task.name=update.message.text
+	task.user = update.message.from_user.id
+	task.name = update.message.text
 	update.message.reply_text("Введите описание задачи")
 	return DESCRIPTION
 
+
 def description(update, context):
-	task.description=update.message.text
+	task.description = update.message.text
 	update.message.reply_text('Введите дату, до которой задача должна быть выполнена в формате дд.мм.гггг')
 	return DATE
 
+
 def date(update, context):
-	date=update.message.text
+	date = update.message.text
 	try:
-		valid_date=datetime.strptime(date, '%d.%m.%Y')
-		if valid_date.date()>=datetime.today().date():
-			task.date=valid_date
+		valid_date = datetime.strptime(date, '%d.%m.%Y')
+		if valid_date.date() >= datetime.today().date():
+			task.date = valid_date
 			update.message.reply_text('Введите время, до которого задача должна быть выполнена в формате чч.мм')
 			return TIME
 		else:
@@ -62,14 +73,15 @@ def date(update, context):
 		update.message.reply_text('Некорректный формат даты!!!\nВведите дату в формате дд.мм.гггг')
 		return DATE
 
+
 def time(update, context):
-	time=update.message.text
+	time = update.message.text
 	try:
-		date_str=task.date.strftime('%d.%m.%Y')+'/'+time
-		valid_time=datetime.strptime(date_str, '%d.%m.%Y/%H.%M')
-		if valid_time>=datetime.today():
+		date_str = task.date.strftime('%d.%m.%Y')+'/'+time
+		valid_time = datetime.strptime(date_str, '%d.%m.%Y/%H.%M')
+		if valid_time >= datetime.today():
 			tzut=tzutc()
-			task.date=valid_time
+			task.date = valid_time.replace(tzinfo=tzut)
 			addTask_firebase(task, db)
 			update.message.reply_text('Задача успешно добавлена')
 			return ConversationHandler.END
@@ -80,24 +92,32 @@ def time(update, context):
 		update.message.reply_text('Некорректный формат времени!!!\nВведите время в формате чч.мм')
 		return TIME
 
+
 def cancel(update, context):
 	update.message.reply_text('Вы отменили добавление задачи')
 	return ConversationHandler.END
 
+
 def getAll(update, context):
-	update.message.reply_text('Список задач:')
-	tasks=getAll_firebase(update.message.from_user.id, db)
-	for doc in tasks:
-		task=Task.from_dict(doc.to_dict())
-		update.message.reply_text(task.to_str())
+	tasks = getAll_firebase(update.message.from_user.id, db)
+	if tasks:
+		update.message.reply_text('Список задач:')
+		for task in tasks:
+			update.message.reply_text(task.to_str())
+	else:
+		update.message.reply_text('У вас нет задач')
+
+
 def update_task(update, context):
 	update.message.reply_text('Введите название задачи, которую хотите изменить\nиспользуйте /cancel чтобы отменить изменение')
 	return UPDATE_GET
 
+
 def update_get(update, context):
-	name=update.message.text
-	task.copy(get_firebase(update.message.from_user.id, name, db))
-	if task:
+	name = update.message.text
+	task_copy=get_firebase(update.message.from_user.id, name, db)
+	if task_copy:
+		task.copy(task_copy)
 		update.message.reply_text(task.to_str())
 		update.message.reply_text('Введите новое описание задачи\nВведите /skip чтобы не изменять описание')
 		return UPDATE_DESCRIPTION
@@ -105,21 +125,24 @@ def update_get(update, context):
 		update.message.reply_text('Нет такой задачи. Попробуйте ввести название снова')
 		return UPDATE_GET
 
+
 def update_description(update, context):
-	task.description=update.message.text
+	task.description = update.message.text
 	update.message.reply_text('Введите новую дату, до которой задача должна быть выполнена\nВведите /skip чтобы не изменять дату')
 	return UPDATE_DATE
+
 
 def skip_description(update, context):
 	update.message.reply_text('Введите новую дату, до которой задача должна быть выполнена\nВведите /skip чтобы не изменять дату')
 	return UPDATE_DATE
 
+
 def update_date(update, context):
-	date=update.message.text
+	date = update.message.text
 	try:
-		valid_date=datetime.strptime(date, '%d.%m.%Y')
-		if valid_date.date()>=datetime.today().date():
-			task.date=valid_date
+		valid_date = datetime.strptime(date, '%d.%m.%Y')
+		if valid_date.date() >= datetime.today().date():
+			task.date = valid_date
 			update.message.reply_text('Введите время, до которого задача должна быть выполнена в формате чч.мм\nВведите /skip чтобы не изменять время')
 			return UPDATE_TIME
 		else:
@@ -129,17 +152,21 @@ def update_date(update, context):
 		update.message.reply_text('Некорректный формат даты!!!\nВведите дату в формате дд.мм.гггг')
 		return UPDATE_DATE
 
+
 def skip_date(update, context):
 	update.message.reply_text('Введите время, до которого задача должна быть выполнена в формате чч.мм\nВведите /skip чтобы не изменять время')
-	return update_time
+	return UPDATE_TIME
+
 
 def update_time(update, context):
-	time=update.message.text
+	time = update.message.text
 	try:
-		date_str=task.date.strftime('%d.%m.%Y')+'/'+time
-		valid_time=datetime.strptime(date_str, '%d.%m.%Y/%H.%M')
-		if valid_time>=datetime.today():
-			task.date=valid_time
+		date_str = task.date.strftime('%d.%m.%Y')+'/'+time
+		valid_time = datetime.strptime(date_str, '%d.%m.%Y/%H.%M')
+		if valid_time >= datetime.today():
+			tzut=tzutc()
+			task.date = valid_time.replace(tzinfo=tzut)
+			task.is_send_message = False
 			update_firebase(update.message.from_user.id,task, db)
 			update.message.reply_text('Задача успешно изменена')
 			return ConversationHandler.END
@@ -150,22 +177,27 @@ def update_time(update, context):
 		update.message.reply_text('Некорректный формат времени!!!\nВведите время в формате чч.мм')
 		return UPDATE_TIME
 
+
 def skip_time(update, context):
+	task.is_send_message = False
 	update_firebase(update.message.from_user.id, task, db)
 	update.message.reply_text('Задача успешно изменена')
 	return ConversationHandler.END
+
 
 def cancel_update(update, context):
 	update.message.reply_text('Вы отменили редактирование задачи')
 	return ConversationHandler.END
 
+
 def delTask(update, context):
 	update.message.reply_text('Введите название задачи, которую хотите удалить\nВведите /cancel чтобы не удалять задачу')
 	return DELETE_GET
 
+
 def delete_get(update, context):
-	name=update.message.text
-	task=get_firebase(update.message.from_user.id, name, db)
+	name = update.message.text
+	task = get_firebase(update.message.from_user.id, name, db)
 	if task:
 		delete_firebase(update.message.from_user.id, name, db)
 		update.message.reply_text('задача удалена')
@@ -174,17 +206,20 @@ def delete_get(update, context):
 		update.message.reply_text('Нет такой задачи. Попробуйте ввести название снова')
 		return DELETE_GET
 
+
 def cancel_delete(update, context):
 	update.message.reply_text('Вы отменили удаление задачи')
 	return ConversationHandler.END
+
 
 def doneTask(update, context):
 	update.message.reply_text('Какую задачу пометить как выполненную?\nВведите /cancel чтобы не помечать задачу')
 	return DONE_GET
 
+
 def done_get(update, context):
-	name=update.message.text
-	task=get_firebase(update.message.from_user.id, name, db)
+	name = update.message.text
+	task = get_firebase(update.message.from_user.id, name, db)
 	if task:
 		done_firebase(update.message.from_user.id, name, db)
 		update.message.reply_text('Задача помечена как выполненная')
@@ -193,47 +228,41 @@ def done_get(update, context):
 		update.message.reply_text('Нет такой задачи. Попробуйте ввести название снова')
 		return DONE_GET
 
+
 def cancel_done(update, context):
 	update.message.reply_text('Вы отменили выполнение задачи')
 	return ConversationHandler.END
 
 
-
 def check_db(context):
-	users=get_users(db)
-	print('оно происходит')
+	users = get_users(db)
 	for doc in users:
-		user=doc.to_dict()
-		print('user==='+str(user['id']))
-		tasks=getAll_firebase(user['id'], db)
+		user = doc.to_dict()
+		tasks = getAll_firebase(user['id'], db)
 		for task_doc in tasks:
-			task=Task.from_dict(task_doc.to_dict())
-			print('задача'+task.to_str()+'\n')
-			if task.date.replace(tzinfo=None) <= datetime.now() and task.is_done != True and task.is_send_message == False:
+			task = Task.from_dict(task_doc.to_dict())
+			date=datetime.now()
+			date = date.replace(tzinfo=tzutc())
+			if task.date <= date and not task.is_done and not task.is_send_message:
 				context.bot.send_message(chat_id=user['id'], text='Вы не выполнили задачу!\n'+task.to_str())
-				task.is_send_message=True
+				task.is_send_message = True
 				addTask_firebase(task, db)
-				print('время в utc   '+str(datetime.utcnow()))
-				#print('отправлено пользователь=='+str(user['id']))
-				#print('задача'+task.to_str()+'\n')
 
 
 def main():
 	
-	updater=Updater(token='1361442277:AAGvchKc35aElkOd9NPFIBJGCO3s8XzpjQI', use_context=True)
-	dispatcher=updater.dispatcher
-	start_handler=CommandHandler('start', start)
-	dispatcher.add_handler(start_handler)
+	updater = Updater(token='1361442277:AAGvchKc35aElkOd9NPFIBJGCO3s8XzpjQI', use_context=True)
+	dispatcher = updater.dispatcher
+	
+	start_handler = CommandHandler('start', start)
 
-	help_handler=CommandHandler('help', help)
-	dispatcher.add_handler(help_handler)
+	help_handler = CommandHandler('help', help)
 
-	getAll_handler=CommandHandler('getAll', getAll)
-	dispatcher.add_handler(getAll_handler)
+	getAll_handler = CommandHandler('getAll', getAll)
 
-	add_conv_handler=ConversationHandler(
-		entry_points=[CommandHandler('addTask', addTask)],
-		states={
+	add_conv_handler = ConversationHandler(
+		entry_points = [CommandHandler('addTask', addTask)],
+		states = {
 			NAME: [MessageHandler(Filters.text & (~Filters.command), name)],
 
 			DESCRIPTION: [MessageHandler(Filters.text & (~Filters.command), description)],
@@ -242,55 +271,59 @@ def main():
 
 			TIME: [MessageHandler(Filters.text & (~Filters.command), time)]
 		},
-		fallbacks=[CommandHandler('cancel', cancel)]
+		fallbacks = [CommandHandler('cancel', cancel)]
 	)
-	dispatcher.add_handler(add_conv_handler)
 
-	update_conv_handler=ConversationHandler(
-		entry_points=[CommandHandler('editTask', update_task)],
-		states={
+	update_conv_handler = ConversationHandler(
+		entry_points = [CommandHandler('editTask', update_task)],
+		states = {
 			UPDATE_GET: [MessageHandler(Filters.text & (~Filters.command), update_get)],
 
 			UPDATE_DESCRIPTION: [MessageHandler(Filters.text & (~Filters.command), update_description),
-									CommandHandler('skip', skip_description)],
+								 CommandHandler('skip', skip_description)],
 
 			UPDATE_DATE: [MessageHandler(Filters.text & (~Filters.command), update_date),
-							CommandHandler('skip', skip_date)],
+						  CommandHandler('skip', skip_date)],
 
 			UPDATE_TIME: [MessageHandler(Filters.text & (~Filters.command), update_time),
-							CommandHandler('skip', skip_time)]
+						  CommandHandler('skip', skip_time)]
 		},
 
-		fallbacks=[CommandHandler('cancel', cancel_update)]
+		fallbacks = [CommandHandler('cancel', cancel_update)]
 		)
-	dispatcher.add_handler(update_conv_handler)
 
-	delete_conv_handler=ConversationHandler(
-		entry_points=[CommandHandler('delTask', delTask)],
-		states={
+	delete_conv_handler = ConversationHandler(
+		entry_points = [CommandHandler('delTask', delTask)],
+		states = {
 			DELETE_GET: [MessageHandler(Filters.text & (~Filters.command), delete_get)]
 		},
-		fallbacks=[CommandHandler('cancel', cancel_delete)]
+		fallbacks = [CommandHandler('cancel', cancel_delete)]
 		)
-	dispatcher.add_handler(delete_conv_handler)
 
-	done_conv_handler=ConversationHandler(
-			entry_points=[CommandHandler('doneTask', doneTask)],
-			states={
+	done_conv_handler = ConversationHandler(
+			entry_points = [CommandHandler('doneTask', doneTask)],
+			states = {
 				DONE_GET: [MessageHandler(Filters.text & (~Filters.command), done_get)]
 			},
-			fallbacks=[CommandHandler('cancel', cancel_done)]
+			fallbacks = [CommandHandler('cancel', cancel_done)]
 		)
-	dispatcher.add_handler(done_conv_handler)
 
-	unknown_command_handler=MessageHandler(Filters.command, unknown)
+	unknown_command_handler = MessageHandler(Filters.command, unknown)
+
+	dispatcher.add_handler(getAll_handler)
+	dispatcher.add_handler(help_handler)
+	dispatcher.add_handler(start_handler)
+	dispatcher.add_handler(add_conv_handler)
+	dispatcher.add_handler(update_conv_handler)
+	dispatcher.add_handler(delete_conv_handler)
+	dispatcher.add_handler(done_conv_handler)
 	dispatcher.add_handler(unknown_command_handler)
 
-	j=updater.job_queue
-	checking_job=j.run_repeating(check_db, interval=600, first=0)
+	j = updater.job_queue
+	checking_job = j.run_repeating(check_db, interval=600, first=0)
 
 	updater.start_polling()
 	updater.idle()
 
-if __name__=='__main__':
+if __name__ == '__main__':
 	main()
