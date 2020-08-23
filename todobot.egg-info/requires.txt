@@ -1,4 +1,0 @@
-firebase_admin<5.0.0,>=4.3.0
-python-dateutil<3.0.0,>=2.8.1
-python-telegram-bot<13.0,>=12.8
-telegram<0.0.2,>=0.0.1
