@@ -36,7 +36,7 @@ def make_task_to_copy():
 	return Task('copied task', 987654321, 'new description', True, date, False)
 
 
-@pytest.fixture (scope = "module" ) 
+@pytest.fixture (scope="module" ) 
 def init_firebase():
 	cred = credentials.Certificate('../todobotfirebase-firebase-adminsdk-npghl-cdadbeff71.json')
 	firebase_admin.initialize_app(cred)
